@@ -1,0 +1,7 @@
+.git
+.venv
+venv
+__pycache__
+torque_data.db
+torque_log.txt
+project.tar.gz

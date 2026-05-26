@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBD2 Real-Time Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #080b11;
+            --card-bg: rgba(16, 22, 35, 0.65);
+            --card-border: rgba(255, 255, 255, 0.07);
+            --text-main: #f3f4f6;
+            --text-muted: #8e9bb0;
+            --accent-cyan: #00f2fe;
+            --accent-blue: #4facfe;
+            --accent-green: #00ff87;
+            --accent-yellow: #f7ea00;
+            --accent-red: #ff007f;
+            --glow-color: rgba(0, 242, 254, 0.25);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(79, 172, 254, 0.08) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(0, 242, 254, 0.08) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 24px;
+            overflow-x: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--card-border);
+            margin-bottom: 24px;
+        }
+
+        .logo-area h1 {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-area p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Tabs Navigation */
+        .tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .tab-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--card-border);
+            color: var(--text-muted);
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-main);
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--card-border);
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #ff007f;
+            border-radius: 50%;
+            margin-right: 8px;
+            position: relative;
+        }
+
+        .status-dot.online {
+            background-color: #00ff87;
+            box-shadow: 0 0 10px #00ff87;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 255, 135, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(0, 255, 135, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 255, 135, 0); }
+        }
+        
+        /* Alert animation */
+        .alert-blink {
+            animation: alertPulse 0.5s infinite;
+            color: var(--accent-red) !important;
+            text-shadow: 0 0 10px rgba(255, 0, 127, 0.5);
+        }
+        @keyframes alertPulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(0, 242, 254, 0.2);
+        }
+
+        /* View 1: Real-time Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .col-span-2 {
+            grid-column: span 2;
+        }
+
+        /* Large circular gauges */
+        .gauge-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .gauge-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+        }
+
+        .gauge-svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .gauge-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.04);
+            stroke-width: 8;
+        }
+
+        .gauge-fill {
+            fill: none;
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-dasharray: 440;
+            stroke-dashoffset: 440;
+            transition: stroke-dashoffset 0.35s cubic-bezier(0.1, 0.8, 0.25, 1);
+        }
+
+        .gauge-fill.speed {
+            stroke: url(#speed-gradient);
+            filter: drop-shadow(0 0 6px rgba(0, 242, 254, 0.4));
+        }
+
+        .gauge-fill.rpm {
+            stroke: url(#rpm-gradient);
+            filter: drop-shadow(0 0 6px rgba(0, 255, 135, 0.4));
+        }
+
+        .gauge-info {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .gauge-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 38px;
+            font-weight: 900;
+            letter-spacing: -1px;
+        }
+
+        .gauge-unit {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: -2px;
+        }
+
+        .gauge-label {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        /* Horizontal indicator cards */
+        .stat-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 110px;
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 8px 0;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+            border-radius: 3px;
+            transition: width 0.35s ease;
+        }
+
+        .progress-bar.coolant {
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-red));
+        }
+
+        /* Live Map */
+        .map-card {
+            height: 320px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .map-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .coords {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            color: var(--accent-cyan);
+        }
+
+        #map {
+            flex-grow: 1;
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid var(--card-border);
+        }
+
+        /* Diagnostic Terminal / Log */
+        .log-card {
+            height: 320px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-muted);
+        }
+
+        .log-terminal {
+            flex-grow: 1;
+            background: rgba(5, 7, 12, 0.9);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #00ff87;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            padding-bottom: 2px;
+        }
+
+        .log-time {
+            color: var(--accent-cyan);
+        }
+
+        /* View 2: Trip History View Layout */
+        .history-grid {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 20px;
+            min-height: 600px;
+        }
+
+        .trip-list-card {
+            display: flex;
+            flex-direction: column;
+            max-height: 750px;
+            overflow: hidden;
+        }
+
+        .trip-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 14px;
+            padding-right: 4px;
+        }
+
+        .trip-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .trip-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .trip-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .trip-item:hover {
+            border-color: rgba(0, 242, 254, 0.4);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .trip-item.active {
+            background: rgba(0, 242, 254, 0.05);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.1);
+        }
+
+        .trip-item-date {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .trip-item-details {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .trip-details-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%;
+        }
+
+        .trip-stats-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .hist-stat {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 14px;
+            text-align: center;
+        }
+
+        .hist-stat-lbl {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .hist-stat-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            margin-top: 4px;
+        }
+
+        .history-map-container {
+            height: 350px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        #history-map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .history-chart-container {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 15px;
+            height: 250px;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .history-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            .status-badge {
+                width: 100%;
+                justify-content: center;
+            }
+            .trip-stats-summary {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Gradient Defs for SVG meters -->
+    <svg style="width:0;height:0;position:absolute;" aria-hidden="true" focusable="false">
+        <defs>
+            <linearGradient id="speed-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="var(--accent-cyan)" />
+                <stop offset="100%" stop-color="var(--accent-blue)" />
+            </linearGradient>
+            <linearGradient id="rpm-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="var(--accent-green)" />
+                <stop offset="70%" stop-color="var(--accent-yellow)" />
+                <stop offset="100%" stop-color="var(--accent-red)" />
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <header>
+        <div class="logo-area">
+            <h1>OBD2 Telemetry Dashboard</h1>
+            <p>Real-time updates & trip logger from Torque OBD Web Server</p>
+        </div>
+        <div class="status-badge">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-text">Disconnected</span>
+        </div>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" id="tab-realtime" onclick="switchTab('realtime')">Real-time Dashboard</button>
+        <button class="tab-btn" id="tab-history" onclick="switchTab('history')">Trip History (SQLite)</button>
+    </div>
+
+    <!-- VIEW 1: REAL-TIME VIEW -->
+    <div class="dashboard-grid" id="realtime-view">
+        <!-- RPM Gauge -->
+        <div class="card col-span-2 gauge-card">
+            <div class="gauge-container">
+                <svg class="gauge-svg" viewBox="0 0 160 160">
+                    <circle class="gauge-bg" cx="80" cy="80" r="70" />
+                    <circle class="gauge-fill rpm" id="rpm-fill" cx="80" cy="80" r="70" />
+                </svg>
+                <div class="gauge-info">
+                    <span class="gauge-value" id="rpm-val">0</span>
+                    <span class="gauge-unit">RPM</span>
+                </div>
+            </div>
+            <span class="gauge-label">Putaran Mesin</span>
+        </div>
+
+        <!-- Speed Gauge -->
+        <div class="card col-span-2 gauge-card">
+            <div class="gauge-container">
+                <svg class="gauge-svg" viewBox="0 0 160 160">
+                    <circle class="gauge-bg" cx="80" cy="80" r="70" />
+                    <circle class="gauge-fill speed" id="speed-fill" cx="80" cy="80" r="70" />
+                </svg>
+                <div class="gauge-info">
+                    <span class="gauge-value" id="speed-val">0</span>
+                    <span class="gauge-unit">km/h</span>
+                </div>
+            </div>
+            <span class="gauge-label">Kecepatan Kendaraan</span>
+        </div>
+
+        <!-- Engine Load -->
+        <div class="card stat-card">
+            <div class="stat-header">
+                <span>Engine Load</span>
+                <span>k04 / k4</span>
+            </div>
+            <div class="stat-value" id="load-val">0%</div>
+            <div class="progress-container">
+                <div class="progress-bar" id="load-progress"></div>
+            </div>
+        </div>
+
+        <!-- Coolant Temp -->
+        <div class="card stat-card">
+            <div class="stat-header">
+                <span>Coolant Temp</span>
+                <span>k05 / k5</span>
+            </div>
+            <div class="stat-value" id="coolant-val">0°C</div>
+            <div class="progress-container">
+                <div class="progress-bar coolant" id="coolant-progress"></div>
+            </div>
+        </div>
+
+        <!-- Throttle Position -->
+        <div class="card stat-card">
+            <div class="stat-header">
+                <span>Throttle Position</span>
+                <span>k11</span>
+            </div>
+            <div class="stat-value" id="throttle-val">0%</div>
+            <div class="progress-container">
+                <div class="progress-bar" id="throttle-progress"></div>
+            </div>
+        </div>
+
+        <!-- Fuel Level -->
+        <div class="card stat-card">
+            <div class="stat-header">
+                <span>Fuel Level</span>
+                <span>k2f</span>
+            </div>
+            <div class="stat-value" id="fuel-val">0%</div>
+            <div class="progress-container">
+                <div class="progress-bar" id="fuel-progress"></div>
+            </div>
+        </div>
+
+        <!-- GPS Map -->
+        <div class="card col-span-2 map-card">
+            <div class="map-title">
+                <span>GPS Location (Leaflet Map)</span>
+                <span class="coords" id="coords-val">Waiting for signal...</span>
+            </div>
+            <div id="map"></div>
+        </div>
+
+        <!-- Live Terminal Log -->
+        <div class="card col-span-2 log-card">
+            <div class="log-title">Live Diagnostic Log</div>
+            <div class="log-terminal" id="terminal">Waiting for Torque data stream...</div>
+        </div>
+    </div>
+
+    <!-- VIEW 2: HISTORICAL VIEW -->
+    <div class="history-grid" id="history-view" style="display:none;">
+        <!-- Left Sidebar: Trip Session list -->
+        <div class="card trip-list-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>Daftar Perjalanan</h3>
+                <button id="btn-download-csv" class="tab-btn" style="padding: 6px 12px; font-size: 12px; display: none;">Download CSV</button>
+            </div>
+            <div class="trip-list" id="trip-list">
+                <div class="text-muted" style="font-size: 13px;">Mengambil data perjalanan...</div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Trip statistics and route map -->
+        <div class="trip-details-panel">
+            <div class="trip-stats-summary">
+                <div class="hist-stat">
+                    <div class="hist-stat-lbl">Durasi Perjalanan</div>
+                    <div class="hist-stat-val" id="hist-duration">-</div>
+                </div>
+                <div class="hist-stat">
+                    <div class="hist-stat-lbl">Kecepatan Maksimal</div>
+                    <div class="hist-stat-val" id="hist-max-speed">-</div>
+                </div>
+                <div class="hist-stat">
+                    <div class="hist-stat-lbl">Rata-rata Kecepatan</div>
+                    <div class="hist-stat-val" id="hist-avg-speed">-</div>
+                </div>
+                <div class="hist-stat">
+                    <div class="hist-stat-lbl">RPM Maksimal</div>
+                    <div class="hist-stat-val" id="hist-max-rpm">-</div>
+                </div>
+            </div>
+            <div class="history-map-container">
+                <div id="history-map"></div>
+            </div>
+            <div class="history-chart-container">
+                <canvas id="tripChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================================
+        // Real-time Dashboard variables
+        // =====================================================================
+        const rpmFill = document.getElementById('rpm-fill');
+        const rpmVal = document.getElementById('rpm-val');
+        const speedFill = document.getElementById('speed-fill');
+        const speedVal = document.getElementById('speed-val');
+
+        const loadVal = document.getElementById('load-val');
+        const loadProgress = document.getElementById('load-progress');
+
+        const coolantVal = document.getElementById('coolant-val');
+        const coolantProgress = document.getElementById('coolant-progress');
+
+        const throttleVal = document.getElementById('throttle-val');
+        const throttleProgress = document.getElementById('throttle-progress');
+
+        const fuelVal = document.getElementById('fuel-val');
+        const fuelProgress = document.getElementById('fuel-progress');
+
+        const coordsVal = document.getElementById('coords-val');
+        const terminal = document.getElementById('terminal');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+
+        // MAP Setup (Real-time view)
+        let map;
+        let marker;
+
+        function initMap() {
+            map = L.map('map').setView([-6.2088, 106.8456], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                maxZoom: 20
+            }).addTo(map);
+        }
+
+        initMap();
+
+        function updateMap(lat, lon) {
+            if (!lat || !lon) return;
+            const newLatLng = new L.LatLng(lat, lon);
+            
+            coordsVal.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+
+            if (!marker) {
+                marker = L.marker(newLatLng).addTo(map);
+                map.setView(newLatLng, 16);
+            } else {
+                marker.setLatLng(newLatLng);
+                map.panTo(newLatLng);
+            }
+        }
+
+        function setCircularGauge(element, value, max) {
+            const percentage = Math.min(Math.max(value / max, 0), 1);
+            const offset = 440 - (percentage * 440);
+            element.style.strokeDashoffset = offset;
+        }
+
+        function getValue(data, ...keys) {
+            for (const key of keys) {
+                if (data[key] !== undefined) {
+                    const parsed = parseFloat(data[key]);
+                    if (!isNaN(parsed)) return parsed;
+                }
+            }
+            return null;
+        }
+
+        function logToTerminal(message) {
+            const time = new Date().toLocaleTimeString();
+            const logEntry = `<div class="log-entry"><span class="log-time">[${time}]</span> ${message}</div>`;
+            
+            if (terminal.innerHTML === "Waiting for Torque data stream...") {
+                terminal.innerHTML = logEntry;
+            } else {
+                terminal.innerHTML += logEntry;
+            }
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // =====================================================================
+        // Tab switching logic
+        // =====================================================================
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            
+            if (tabId === 'realtime') {
+                document.getElementById('tab-realtime').classList.add('active');
+                document.getElementById('realtime-view').style.display = 'grid';
+                document.getElementById('history-view').style.display = 'none';
+                setTimeout(() => map.invalidateSize(), 50);
+            } else {
+                document.getElementById('tab-history').classList.add('active');
+                document.getElementById('realtime-view').style.display = 'none';
+                document.getElementById('history-view').style.display = 'grid';
+                initHistoryMap();
+                loadTripsList();
+            }
+        }
+
+        // =====================================================================
+        // Historical view logic
+        // =====================================================================
+        let historyMap;
+        let historyPolyline;
+        let historyMarkerStart;
+        let historyMarkerEnd;
+        let tripChartInstance = null;
+
+        function initHistoryMap() {
+            if (historyMap) {
+                setTimeout(() => historyMap.invalidateSize(), 50);
+                return;
+            }
+            
+            historyMap = L.map('history-map').setView([-6.2088, 106.8456], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                maxZoom: 20
+            }).addTo(historyMap);
+        }
+
+        function loadTripsList() {
+            const listContainer = document.getElementById('trip-list');
+            listContainer.innerHTML = '<div class="text-muted" style="font-size: 13px;">Mengambil data...</div>';
+
+            fetch('/api/trips')
+                .then(res => res.json())
+                .then(trips => {
+                    listContainer.innerHTML = '';
+                    if (trips.length === 0) {
+                        listContainer.innerHTML = '<div class="text-muted" style="font-size: 13px; padding: 10px;">Belum ada perjalanan tersimpan.</div>';
+                        document.getElementById('btn-download-csv').style.display = 'none';
+                        return;
+                    }
+
+                    trips.forEach((trip, idx) => {
+                        // Calculate duration
+                        const start = new Date(trip.start_time);
+                        const end = new Date(trip.end_time);
+                        const durationMs = end - start;
+                        const durationMins = Math.round(durationMs / 60000);
+                        const durationText = durationMins > 0 ? `${durationMins} min` : `< 1 min`;
+
+                        const tripItem = document.createElement('div');
+                        tripItem.className = `trip-item ${idx === 0 ? 'active' : ''}`;
+                        tripItem.innerHTML = `
+                            <div class="trip-item-date">${trip.start_time}</div>
+                            <div class="trip-item-details">
+                                <span>Durasi: ${durationText}</span>
+                                <span>Poin: ${trip.record_count}</span>
+                            </div>
+                            <div class="trip-item-details">
+                                <span>Kecepatan Max: ${trip.max_speed} km/h</span>
+                                <span>RPM Max: ${trip.max_rpm}</span>
+                            </div>
+                        `;
+                        
+                        tripItem.onclick = () => {
+                            document.querySelectorAll('.trip-item').forEach(el => el.classList.remove('active'));
+                            tripItem.classList.add('active');
+                            viewTripDetails(trip);
+                        };
+
+                        listContainer.appendChild(tripItem);
+                    });
+
+                    // Auto load the first trip
+                    if (trips.length > 0) {
+                        viewTripDetails(trips[0]);
+                    }
+                })
+                .catch(err => {
+                    listContainer.innerHTML = '<div class="text-muted" style="font-size: 13px; color: red;">Gagal memuat perjalanan.</div>';
+                    console.error("Error loading trips", err);
+                });
+        }
+
+        function viewTripDetails(trip) {
+            // Setup CSV button
+            const csvBtn = document.getElementById('btn-download-csv');
+            csvBtn.style.display = 'block';
+            csvBtn.onclick = () => {
+                window.location.href = `/api/trips/${trip.session_id}/csv`;
+            };
+
+            // Set statistics summary cards
+            const start = new Date(trip.start_time);
+            const end = new Date(trip.end_time);
+            const durationMs = end - start;
+            const durationMins = Math.round(durationMs / 60000);
+            const durationText = durationMins > 0 ? `${durationMins} Menit` : `< 1 Menit`;
+
+            document.getElementById('hist-duration').textContent = durationText;
+            document.getElementById('hist-max-speed').textContent = `${trip.max_speed} km/h`;
+            document.getElementById('hist-avg-speed').textContent = `${trip.avg_speed} km/h`;
+            document.getElementById('hist-max-rpm').textContent = `${trip.max_rpm} RPM`;
+
+            // Clear previous map objects
+            if (historyPolyline) historyMap.removeLayer(historyPolyline);
+            if (historyMarkerStart) historyMap.removeLayer(historyMarkerStart);
+            if (historyMarkerEnd) historyMap.removeLayer(historyMarkerEnd);
+
+            // Fetch detail telemetry points
+            fetch(`/api/trips/${trip.session_id}`)
+                .then(res => res.json())
+                .then(points => {
+                    const latLns = [];
+                    const timeLabels = [];
+                    const speedData = [];
+                    const rpmData = [];
+                    const coolantData = [];
+
+                    points.forEach(p => {
+                        if (p.latitude && p.longitude) {
+                            latLns.push([p.latitude, p.longitude]);
+                        }
+                        // Prepare data for chart
+                        const timeStr = p.timestamp ? p.timestamp.split(' ')[1] : ''; // Just get HH:MM:SS
+                        timeLabels.push(timeStr);
+                        speedData.push(p.speed || 0);
+                        rpmData.push(p.rpm || 0);
+                        coolantData.push(p.coolant || 0);
+                    });
+
+                    // Update Map
+                    if (latLns.length > 0) {
+                        historyPolyline = L.polyline(latLns, {
+                            color: 'var(--accent-cyan)',
+                            weight: 5,
+                            opacity: 0.85,
+                            lineCap: 'round',
+                            filter: 'drop-shadow(0 0 5px rgba(0, 242, 254, 0.5))'
+                        }).addTo(historyMap);
+
+                        const startIcon = L.divIcon({
+                            html: '<div style="background-color:#00ff87; width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 8px #00ff87;"></div>',
+                            className: 'start-marker-icon',
+                            iconSize: [12, 12]
+                        });
+                        const endIcon = L.divIcon({
+                            html: '<div style="background-color:#ff007f; width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 8px #ff007f;"></div>',
+                            className: 'end-marker-icon',
+                            iconSize: [12, 12]
+                        });
+
+                        historyMarkerStart = L.marker(latLns[0], {icon: startIcon}).addTo(historyMap).bindPopup('Titik Awal Perjalanan');
+                        historyMarkerEnd = L.marker(latLns[latLns.length - 1], {icon: endIcon}).addTo(historyMap).bindPopup('Titik Akhir Perjalanan');
+
+                        historyMap.fitBounds(historyPolyline.getBounds(), {padding: [30, 30]});
+                    } else {
+                        historyMap.setView([-6.2088, 106.8456], 13);
+                    }
+
+                    // Render Chart.js
+                    renderChart(timeLabels, speedData, rpmData, coolantData);
+                })
+                .catch(err => {
+                    console.error("Error loading trip points", err);
+                });
+        }
+
+        function renderChart(labels, speed, rpm, coolant) {
+            const ctx = document.getElementById('tripChart').getContext('2d');
+            
+            if (tripChartInstance) {
+                tripChartInstance.destroy();
+            }
+
+            Chart.defaults.color = '#8e9bb0';
+            Chart.defaults.font.family = 'Outfit, sans-serif';
+
+            tripChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Speed (km/h)',
+                            data: speed,
+                            borderColor: '#00f2fe',
+                            backgroundColor: 'rgba(0, 242, 254, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'RPM',
+                            data: rpm,
+                            borderColor: '#00ff87',
+                            backgroundColor: 'rgba(0, 255, 135, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            label: 'Coolant (°C)',
+                            data: coolant,
+                            borderColor: '#ff007f',
+                            backgroundColor: 'rgba(255, 0, 127, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            ticks: {
+                                maxTicksLimit: 10
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Speed / Coolant'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false, 
+                            },
+                            title: {
+                                display: true,
+                                text: 'RPM'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // =====================================================================
+        // SSE Real-time Streaming
+        // =====================================================================
+        let sseWatchdogTimer = null;
+
+        function resetWatchdog() {
+            clearTimeout(sseWatchdogTimer);
+            statusText.textContent = "Live Connected";
+            statusDot.className = "status-dot online";
+            
+            // If no data received for 15 seconds, assume disconnected from car
+            sseWatchdogTimer = setTimeout(() => {
+                statusText.textContent = "Menunggu Data dari Mobil... (Terputus)";
+                statusDot.className = "status-dot";
+                logToTerminal("Peringatan: Tidak ada data dari mobil selama 15 detik.");
+            }, 15000);
+        }
+
+        function connectSSE() {
+            statusText.textContent = "Connecting...";
+            statusDot.className = "status-dot";
+
+            const source = new EventSource('/stream');
+
+            source.onopen = function() {
+                statusText.textContent = "Menunggu Data dari Mobil...";
+                statusDot.className = "status-dot"; // Not online until data arrives
+                logToTerminal("Koneksi Server Aktif. Menunggu telemetry mobil...");
+            };
+
+            source.onerror = function(err) {
+                statusText.textContent = "Disconnected from Server (Retrying...)";
+                statusDot.className = "status-dot";
+                clearTimeout(sseWatchdogTimer);
+                logToTerminal("Koneksi server terputus. Menghubungkan ulang dalam 3 detik...");
+                source.close();
+                setTimeout(connectSSE, 3000);
+            };
+
+            source.onmessage = function(event) {
+                // Keep-alive or empty message
+                if (event.data === ": keepalive" || !event.data.trim()) {
+                    return;
+                }
+
+                resetWatchdog();
+
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    // RPM
+                    const rpm = getValue(data, 'k0c', 'kc');
+                    if (rpm !== null) {
+                        rpmVal.textContent = Math.round(rpm);
+                        setCircularGauge(rpmFill, rpm, 8000);
+                        // ALERT: High RPM
+                        if (rpm > 6000) {
+                            rpmVal.classList.add('alert-blink');
+                        } else {
+                            rpmVal.classList.remove('alert-blink');
+                        }
+                    }
+
+                    // Speed
+                    const speed = getValue(data, 'k0d', 'kd', 'kff1001');
+                    if (speed !== null) {
+                        speedVal.textContent = Math.round(speed);
+                        setCircularGauge(speedFill, speed, 220);
+                    }
+
+                    // Load
+                    const load = getValue(data, 'k04', 'k4');
+                    if (load !== null) {
+                        loadVal.textContent = `${Math.round(load)}%`;
+                        loadProgress.style.width = `${Math.round(load)}%`;
+                    }
+
+                    // Coolant
+                    const coolant = getValue(data, 'k05', 'k5');
+                    if (coolant !== null) {
+                        coolantVal.textContent = `${Math.round(coolant)}°C`;
+                        const coolantPercent = Math.min(Math.max((coolant / 120) * 100, 0), 100);
+                        coolantProgress.style.width = `${coolantPercent}%`;
+                        
+                        // ALERT: High Coolant Temperature
+                        if (coolant > 105) {
+                            coolantVal.classList.add('alert-blink');
+                            logToTerminal(`⚠️ PERINGATAN: Suhu Mesin Tinggi (${Math.round(coolant)}°C)!`);
+                        } else {
+                            coolantVal.classList.remove('alert-blink');
+                        }
+                    }
+
+                    // Throttle
+                    const throttle = getValue(data, 'k11');
+                    if (throttle !== null) {
+                        throttleVal.textContent = `${Math.round(throttle)}%`;
+                        throttleProgress.style.width = `${Math.round(throttle)}%`;
+                    }
+
+                    // Fuel
+                    const fuel = getValue(data, 'k2f');
+                    if (fuel !== null) {
+                        fuelVal.textContent = `${Math.round(fuel)}%`;
+                        fuelProgress.style.width = `${Math.round(fuel)}%`;
+                    }
+
+                    // GPS Map
+                    const lat = getValue(data, 'kff1005');
+                    const lon = getValue(data, 'kff1006');
+                    if (lat !== null && lon !== null) {
+                        updateMap(lat, lon);
+                    }
+
+                    // Summary Log
+                    const summary = [];
+                    if (rpm !== null) summary.push(`RPM: ${Math.round(rpm)}`);
+                    if (speed !== null) summary.push(`Speed: ${Math.round(speed)}km/h`);
+                    if (coolant !== null) summary.push(`Coolant: ${Math.round(coolant)}C`);
+                    
+                    logToTerminal(`Paket data diterima: ${summary.join(' | ') || (Object.keys(data).length + " parameter")}`);
+
+                } catch (e) {
+                    // console.error("Error parsing real-time message", e);
+                }
+            };
+        }
+
+        connectSSE();
+    </script>
+</body>
+</html>

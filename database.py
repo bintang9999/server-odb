@@ -1,10 +1,16 @@
 import sqlite3
 import datetime
 import json
+import os
 
-DATABASE_FILE = "torque_data.db"
+DATABASE_FILE = os.environ.get("DATABASE_PATH", "data/torque_data.db")
 
 def init_db():
+    # Pastikan direktori tempat database berada sudah dibuat
+    dir_name = os.path.dirname(DATABASE_FILE)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
+        
     conn = sqlite3.connect(DATABASE_FILE)
     c = conn.cursor()
     

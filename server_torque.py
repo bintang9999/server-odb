@@ -12,6 +12,7 @@ import io
 from database import init_db, save_telemetry, get_all_trips, get_trip_details, prune_old_data
 
 PORT = 8080
+LOG_FILE = os.environ.get("LOG_PATH", "data/torque_log.txt")
 
 # ==============================================================================
 # SSE Broker Setup
@@ -94,7 +95,10 @@ class TorqueHandler(http.server.SimpleHTTPRequestHandler):
                 
             # Write to raw text log file as secondary backup
             try:
-                with open("torque_log.txt", "a") as log_file:
+                log_dir = os.path.dirname(LOG_FILE)
+                if log_dir:
+                    os.makedirs(log_dir, exist_ok=True)
+                with open(LOG_FILE, "a") as log_file:
                     log_file.write(json.dumps(log_data) + "\n")
             except Exception as e:
                 pass

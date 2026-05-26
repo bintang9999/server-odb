@@ -10,7 +10,8 @@ __pycache__/
 *.pyo
 *.pyd
 
-# SQLite Database
+# SQLite Database and Logs
+data/
 torque_data.db
 
 # Logs

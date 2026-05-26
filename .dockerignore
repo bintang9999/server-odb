@@ -2,6 +2,7 @@
 .venv
 venv
 __pycache__
+data/
 torque_data.db
 torque_log.txt
 project.tar.gz

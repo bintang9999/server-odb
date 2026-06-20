@@ -640,9 +640,13 @@
     <div class="history-grid" id="history-view" style="display:none;">
         <!-- Left Sidebar: Trip Session list -->
         <div class="card trip-list-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <h3>Daftar Perjalanan</h3>
-                <button id="btn-download-csv" class="tab-btn" style="padding: 6px 12px; font-size: 12px; display: none;">Download CSV</button>
+                <div style="display: flex; gap: 6px;">
+                    <button id="btn-download-csv" class="tab-btn" style="padding: 6px 12px; font-size: 12px; display: none;">Download CSV</button>
+                    <button id="btn-delete-trip" class="tab-btn" style="padding: 6px 12px; font-size: 12px; display: none; background: rgba(255,0,127,0.15); border-color: rgba(255,0,127,0.4); color: #ff4d94;" onclick="deleteSelectedTrip()">🗑 Hapus Trip</button>
+                    <button id="btn-delete-all" class="tab-btn" style="padding: 6px 12px; font-size: 12px; background: rgba(255,0,0,0.1); border-color: rgba(255,0,0,0.3); color: #ff6b6b;" onclick="deleteAllTrips()">🗑 Hapus Semua</button>
+                </div>
             </div>
             <div class="trip-list" id="trip-list">
                 <div class="text-muted" style="font-size: 13px;">Mengambil data perjalanan...</div>
@@ -842,6 +846,8 @@
                         tripItem.onclick = () => {
                             document.querySelectorAll('.trip-item').forEach(el => el.classList.remove('active'));
                             tripItem.classList.add('active');
+                            selectedTripSessionId = trip.session_id;
+                            document.getElementById('btn-delete-trip').style.display = 'block';
                             viewTripDetails(trip);
                         };
 
@@ -857,6 +863,48 @@
                     listContainer.innerHTML = '<div class="text-muted" style="font-size: 13px; color: red;">Gagal memuat perjalanan.</div>';
                     console.error("Error loading trips", err);
                 });
+        }
+
+        let selectedTripSessionId = null;
+
+        function deleteSelectedTrip() {
+            if (!selectedTripSessionId) {
+                alert('Pilih trip terlebih dahulu!');
+                return;
+            }
+            if (!confirm('Hapus trip ini beserta semua datanya?')) return;
+
+            fetch(`/api/trips/${selectedTripSessionId}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        alert(`Trip dihapus! (${data.deleted_telemetry} data point)`);
+                        selectedTripSessionId = null;
+                        document.getElementById('btn-delete-trip').style.display = 'none';
+                        loadTripsList();
+                    } else {
+                        alert('Gagal menghapus: ' + data.message);
+                    }
+                })
+                .catch(err => alert('Error: ' + err));
+        }
+
+        function deleteAllTrips() {
+            if (!confirm('HAPUS SEMUA log perjalanan? Aksi ini tidak bisa dibatalkan!')) return;
+            if (!confirm('Yakin? Semua data trip akan hilang permanen.')) return;
+
+            fetch('/api/trips', { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        alert(`Semua trip dihapus! (${data.deleted_trips} trip, ${data.deleted_telemetry} data point)`);
+                        selectedTripSessionId = null;
+                        loadTripsList();
+                    } else {
+                        alert('Gagal menghapus: ' + data.message);
+                    }
+                })
+                .catch(err => alert('Error: ' + err));
         }
 
         function viewTripDetails(trip) {

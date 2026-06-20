@@ -9,7 +9,10 @@ import os
 import csv
 import io
 
-from database import init_db, save_telemetry, get_all_trips, get_trip_details, prune_old_data
+from database import init_db, save_telemetry, get_all_trips, get_trip_details, delete_trip, delete_all_trips, prune_old_data
+
+# Timezone WIB (UTC+7)
+WIB = datetime.timezone(datetime.timedelta(hours=7))
 
 PORT = 8080
 LOG_FILE = os.environ.get("LOG_PATH", "data/torque_log.txt")
@@ -56,7 +59,7 @@ class TorqueHandler(http.server.SimpleHTTPRequestHandler):
         # 1. Handling Torque uploads / custom HTTP GET requests
         if query_params:
             log_data = {k: v[0] for k, v in query_params.items()}
-            log_data["timestamp_server"] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            log_data["timestamp_server"] = str(datetime.datetime.now(WIB).strftime("%Y-%m-%d %H:%M:%S"))
             
             # Parse parameters for SQLite insertion
             def safe_float(key_list):
@@ -222,6 +225,58 @@ class TorqueHandler(http.server.SimpleHTTPRequestHandler):
         # Default fallback
         else:
             super().do_GET()
+
+    def do_DELETE(self):
+        parsed_path = urllib.parse.urlparse(self.path)
+        path = parsed_path.path
+
+        # DELETE /api/trips (Delete ALL trips)
+        if path == '/api/trips':
+            try:
+                result = delete_all_trips()
+                if result:
+                    payload = json.dumps({"status": "ok", "message": "All trips deleted", **result}).encode('utf-8')
+                    self.send_response(200)
+                else:
+                    payload = json.dumps({"status": "error", "message": "Failed to delete"}).encode('utf-8')
+                    self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(payload)
+            except Exception as e:
+                self.send_error(500, f"Error: {e}")
+            return
+
+        # DELETE /api/trips/<session_id> (Delete single trip)
+        elif path.startswith('/api/trips/'):
+            session_id = path.replace('/api/trips/', '')
+            try:
+                result = delete_trip(session_id)
+                if result:
+                    payload = json.dumps({"status": "ok", "message": f"Trip {session_id} deleted", **result}).encode('utf-8')
+                    self.send_response(200)
+                else:
+                    payload = json.dumps({"status": "error", "message": "Failed to delete"}).encode('utf-8')
+                    self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(payload)
+            except Exception as e:
+                self.send_error(500, f"Error: {e}")
+            return
+
+        else:
+            self.send_error(404, "Not Found")
+
+    def do_OPTIONS(self):
+        """Handle CORS preflight for DELETE requests."""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
 
 # ==============================================================================
 # Running Server

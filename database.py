@@ -144,6 +144,40 @@ def get_trip_details(session_id):
         })
     return points
 
+def delete_trip(session_id):
+    """Delete a single trip and all its telemetry data."""
+    try:
+        conn = sqlite3.connect(DATABASE_FILE)
+        c = conn.cursor()
+        c.execute("DELETE FROM telemetry WHERE session_id = ?", (session_id,))
+        deleted_telemetry = c.rowcount
+        c.execute("DELETE FROM trips WHERE session_id = ?", (session_id,))
+        deleted_trips = c.rowcount
+        conn.commit()
+        conn.close()
+        print(f"[Delete] Removed trip {session_id} ({deleted_telemetry} telemetry points)")
+        return {"deleted_trips": deleted_trips, "deleted_telemetry": deleted_telemetry}
+    except Exception as e:
+        print(f"Error deleting trip: {e}")
+        return None
+
+def delete_all_trips():
+    """Delete ALL trips and telemetry data."""
+    try:
+        conn = sqlite3.connect(DATABASE_FILE)
+        c = conn.cursor()
+        c.execute("DELETE FROM telemetry")
+        deleted_telemetry = c.rowcount
+        c.execute("DELETE FROM trips")
+        deleted_trips = c.rowcount
+        conn.commit()
+        conn.close()
+        print(f"[Delete All] Removed {deleted_trips} trips and {deleted_telemetry} telemetry points")
+        return {"deleted_trips": deleted_trips, "deleted_telemetry": deleted_telemetry}
+    except Exception as e:
+        print(f"Error deleting all trips: {e}")
+        return None
+
 def prune_old_data(days=30):
     """Deletes trips and telemetry older than a certain number of days."""
     try:

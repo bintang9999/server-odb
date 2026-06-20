@@ -75,8 +75,8 @@ class TorqueHandler(http.server.SimpleHTTPRequestHandler):
                 "coolant": safe_float(['k05', 'k5']),
                 "throttle": safe_float(['k11']),
                 "fuel": safe_float(['k2f']),
-                "latitude": safe_float(['kff1005']),
-                "longitude": safe_float(['kff1006'])
+                "latitude": safe_float(['kff1006']),
+                "longitude": safe_float(['kff1005'])
             }
 
             session_id = log_data.get('session', 'default_session')

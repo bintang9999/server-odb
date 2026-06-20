@@ -1147,9 +1147,9 @@
                         fuelProgress.style.width = `${Math.round(fuel)}%`;
                     }
 
-                    // GPS Map
-                    const lat = getValue(data, 'kff1005');
-                    const lon = getValue(data, 'kff1006');
+                    // GPS Map (kff1006 = Latitude, kff1005 = Longitude)
+                    const lat = getValue(data, 'kff1006');
+                    const lon = getValue(data, 'kff1005');
                     if (lat !== null && lon !== null) {
                         updateMap(lat, lon);
                     }

@@ -856,6 +856,8 @@
 
                     // Auto load the first trip
                     if (trips.length > 0) {
+                        selectedTripSessionId = trips[0].session_id;
+                        document.getElementById('btn-delete-trip').style.display = 'block';
                         viewTripDetails(trips[0]);
                     }
                 })

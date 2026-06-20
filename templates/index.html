@@ -811,18 +811,21 @@
             const listContainer = document.getElementById('trip-list');
             listContainer.innerHTML = '<div class="text-muted" style="font-size: 13px;">Mengambil data...</div>';
 
+            // Reset all state on every reload
+            selectedTripSessionId = null;
+            document.getElementById('btn-delete-trip').style.display = 'none';
+            document.getElementById('btn-download-csv').style.display = 'none';
+
             fetch('/api/trips')
                 .then(res => res.json())
                 .then(trips => {
                     listContainer.innerHTML = '';
-                    if (trips.length === 0) {
+                    if (!trips || trips.length === 0) {
                         listContainer.innerHTML = '<div class="text-muted" style="font-size: 13px; padding: 10px;">Belum ada perjalanan tersimpan.</div>';
-                        document.getElementById('btn-download-csv').style.display = 'none';
                         return;
                     }
 
                     trips.forEach((trip, idx) => {
-                        // Calculate duration
                         const start = new Date(trip.start_time);
                         const end = new Date(trip.end_time);
                         const durationMs = end - start;
@@ -843,9 +846,9 @@
                             </div>
                         `;
                         
-                        tripItem.onclick = () => {
+                        tripItem.onclick = function() {
                             document.querySelectorAll('.trip-item').forEach(el => el.classList.remove('active'));
-                            tripItem.classList.add('active');
+                            this.classList.add('active');
                             selectedTripSessionId = trip.session_id;
                             document.getElementById('btn-delete-trip').style.display = 'block';
                             viewTripDetails(trip);
@@ -854,12 +857,10 @@
                         listContainer.appendChild(tripItem);
                     });
 
-                    // Auto load the first trip
-                    if (trips.length > 0) {
-                        selectedTripSessionId = trips[0].session_id;
-                        document.getElementById('btn-delete-trip').style.display = 'block';
-                        viewTripDetails(trips[0]);
-                    }
+                    // Auto-select first trip
+                    selectedTripSessionId = trips[0].session_id;
+                    document.getElementById('btn-delete-trip').style.display = 'block';
+                    viewTripDetails(trips[0]);
                 })
                 .catch(err => {
                     listContainer.innerHTML = '<div class="text-muted" style="font-size: 13px; color: red;">Gagal memuat perjalanan.</div>';
@@ -876,19 +877,22 @@
             }
             if (!confirm('Hapus trip ini beserta semua datanya?')) return;
 
-            fetch(`/api/trips/${selectedTripSessionId}`, { method: 'DELETE' })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        alert(`Trip dihapus! (${data.deleted_telemetry} data point)`);
-                        selectedTripSessionId = null;
-                        document.getElementById('btn-delete-trip').style.display = 'none';
-                        loadTripsList();
-                    } else {
-                        alert('Gagal menghapus: ' + data.message);
-                    }
+            const tripToDelete = selectedTripSessionId;
+
+            fetch('/api/trips/' + tripToDelete, { method: 'DELETE' })
+                .then(res => {
+                    if (!res.ok) throw new Error('Server error: ' + res.status);
+                    return res.json();
                 })
-                .catch(err => alert('Error: ' + err));
+                .then(data => {
+                    alert('Trip dihapus! (' + (data.deleted_telemetry || 0) + ' data point)');
+                    loadTripsList();
+                })
+                .catch(err => {
+                    console.error('Delete trip error:', err);
+                    alert('Error menghapus trip: ' + err.message);
+                    loadTripsList();
+                });
         }
 
         function deleteAllTrips() {
@@ -896,17 +900,19 @@
             if (!confirm('Yakin? Semua data trip akan hilang permanen.')) return;
 
             fetch('/api/trips', { method: 'DELETE' })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        alert(`Semua trip dihapus! (${data.deleted_trips} trip, ${data.deleted_telemetry} data point)`);
-                        selectedTripSessionId = null;
-                        loadTripsList();
-                    } else {
-                        alert('Gagal menghapus: ' + data.message);
-                    }
+                .then(res => {
+                    if (!res.ok) throw new Error('Server error: ' + res.status);
+                    return res.json();
                 })
-                .catch(err => alert('Error: ' + err));
+                .then(data => {
+                    alert('Semua trip dihapus! (' + (data.deleted_trips || 0) + ' trip, ' + (data.deleted_telemetry || 0) + ' data point)');
+                    loadTripsList();
+                })
+                .catch(err => {
+                    console.error('Delete all error:', err);
+                    alert('Error menghapus semua: ' + err.message);
+                    loadTripsList();
+                });
         }
 
         function viewTripDetails(trip) {
